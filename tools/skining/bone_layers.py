@@ -28,7 +28,7 @@ class WEIGHTPAINT_PT_bone_collections(Panel):
     bl_idname = "WEIGHTPAINT_PT_bone_collections"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_category = 'Tool'
+    bl_category = 'Skinning'
 
     @classmethod
     def poll(cls, context):

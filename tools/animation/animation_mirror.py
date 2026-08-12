@@ -169,14 +169,16 @@ classes = (
 )
 
 def register():
-    bpy.types.WindowManager.mirror_anim_offset = bpy.props.IntProperty(name="Offset", default=0)
     for cls in classes:
         bpy.utils.register_class(cls)
+    bpy.types.WindowManager.mirror_anim_offset = bpy.props.IntProperty(name="Offset", default=0)
 
 def unregister():
     for cls in reversed(classes):
-        bpy.utils.register_class(cls)
-    del bpy.types.WindowManager.mirror_anim_offset
+        if hasattr(cls, "bl_rna"):
+            bpy.utils.unregister_class(cls)
+    if hasattr(bpy.types.WindowManager, "mirror_anim_offset"):
+        del bpy.types.WindowManager.mirror_anim_offset
 
 if __name__ == "__main__":
     register()

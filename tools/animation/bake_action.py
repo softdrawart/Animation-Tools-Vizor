@@ -27,9 +27,9 @@ def update_action_list(self, context):
 class BakeAction_PT(bpy.types.Panel):
     bl_idname = "OBJECT_PT_bake_action"
     bl_label = "Bake Action"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"
-    bl_category = "Bake Action"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = 'Animation'
     bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):

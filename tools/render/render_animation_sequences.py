@@ -278,9 +278,10 @@ class RENDER_Props(bpy.types.PropertyGroup):
 class RENDER_PT_Panel(bpy.types.Panel):
     bl_idname = 'RENDER_PT_Panel'
     bl_label = 'Render Sequences'
+
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_category = 'render'
+    bl_category = 'Render'
     bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
@@ -709,7 +710,6 @@ class RENDER_SEQ_OT(bpy.types.Operator):
 
 classes = (
     RENDER_Props,
-    RENDER_PT_Panel,
     RENDER_OT_AddRender,
     RENDER_OT_DeleteRender,
     RENDER_OT_DuplicateRender,
@@ -724,6 +724,7 @@ classes = (
     RENDER_OT_DuplicateTracks,
     RENDER_OT_MoveRender,
     RENDER_OT_MoveSelectedTracks,
+    RENDER_PT_Panel,
 )
 
 props = [

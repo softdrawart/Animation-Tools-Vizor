@@ -122,7 +122,7 @@ class BPP_PT_panel(bpy.types.Panel):
     bl_idname = "BPP_PT_panel"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_category = 'Bone Primitives'
+    bl_category = 'Animation'
 
     def draw(self, context):
         layout = self.layout

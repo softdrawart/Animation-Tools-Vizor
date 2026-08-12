@@ -1,4 +1,3 @@
-
 import bpy
 
 def get_related_meshes(armature):
@@ -13,6 +12,79 @@ def get_related_meshes(armature):
                 meshes.add(obj)
     return list(meshes)
 
+def is_controlled_by(bone, target_name, armature, visited=None):
+    """Recursively checks if a bone is controlled by a target bone via constraints or parenting."""
+    if visited is None:
+        visited = set()
+        
+    if bone.name in visited:
+        return False
+        
+    visited.add(bone.name)
+    
+    # 1. Check direct parent
+    if bone.parent and bone.parent.name == target_name:
+        return True
+        
+    # 2. Check direct constraints
+    for c in bone.constraints:
+        target_obj = getattr(c, 'target', None)
+        if target_obj and target_obj != armature:
+            continue  # Skip constraints targeting objects outside the current armature
+            
+        subtarget = getattr(c, 'subtarget', None)
+        if subtarget == target_name:
+            return True
+            
+    # 3. Recursive trace up parent hierarchy
+    if bone.parent and is_controlled_by(bone.parent, target_name, armature, visited):
+        return True
+        
+    # 4. Recursive trace up constraint hierarchy (MCH or ORG bones)
+    for c in bone.constraints:
+        target_obj = getattr(c, 'target', None)
+        if target_obj and target_obj != armature:
+            continue
+            
+        subtarget = getattr(c, 'subtarget', None)
+        if subtarget and subtarget in armature.pose.bones:
+            if is_controlled_by(armature.pose.bones[subtarget], target_name, armature, visited):
+                return True
+                
+    return False
+
+def get_actual_deform_bone_names(armature, selected_pose_bones):
+    """Finds deformation bones corresponding to the selected (potentially non-deform) bones."""
+    deform_names = set()
+    
+    if not selected_pose_bones:
+        return list(deform_names)
+        
+    all_deform_bones = [b for b in armature.pose.bones if b.bone.use_deform]
+    
+    for p_bone in selected_pose_bones:
+        # If the selected bone is already a deform bone
+        if p_bone.bone.use_deform:
+            deform_names.add(p_bone.name)
+        
+        # Method 1: Check for 'DEF-' prefix (Simplest way for Rigify)
+        def_name = "DEF-" + p_bone.name
+        # Strip out IK/FK identifiers
+        if "_fk" in def_name or "_ik" in def_name:
+            def_name = def_name.replace("_fk", "").replace("_ik", "")
+
+        if def_name in armature.pose.bones and armature.pose.bones[def_name].bone.use_deform:
+            deform_names.add(def_name)
+            continue  # Skip further checks if DEF- bone is found
+            
+        # Method 2: Traverse hierarchy to find connected deform bones
+        for def_bone in all_deform_bones:
+            if def_bone.name not in deform_names:
+                if is_controlled_by(def_bone, p_bone.name, armature):
+                    deform_names.add(def_bone.name)
+                    
+    return list(deform_names)
+
 class ANIM_OT_ModifySoloMask(bpy.types.Operator):
     """Add or Remove bones from the existing Solo Mask"""
     bl_idname = "anim.modify_solo_mask"
@@ -23,12 +95,17 @@ class ANIM_OT_ModifySoloMask(bpy.types.Operator):
 
     def execute(self, context):
         armature = context.active_object
-        selected_bones = [b.name for b in context.selected_pose_bones]
-        if not selected_bones: return {'CANCELLED'}
+        if not context.selected_pose_bones: return {'CANCELLED'}
+        
+        original_bones = [b.name for b in context.selected_pose_bones]
+        deform_bones = get_actual_deform_bone_names(armature, context.selected_pose_bones)
+        
+        # Combine lists to ensure direct mesh parenting to control bones isn't broken
+        selected_bones = list(set(original_bones + deform_bones))
 
         for obj in get_related_meshes(armature):
             mask_group = obj.vertex_groups.get("Solo_Mask")
-            if not mask_group: continue # Can only modify if it already exists
+            if not mask_group: continue 
 
             # Get indices for selected bones
             bone_indices = [obj.vertex_groups[b].index for b in selected_bones if b in obj.vertex_groups]
@@ -56,7 +133,11 @@ class ANIM_OT_SoloBoneGeometry(bpy.types.Operator):
 
     def execute(self, context):
         armature = context.active_object
-        selected_bone_names = [b.name for b in context.selected_pose_bones]
+        if not context.selected_pose_bones: return {'CANCELLED'}
+        
+        original_bones = [b.name for b in context.selected_pose_bones]
+        deform_bones = get_actual_deform_bone_names(armature, context.selected_pose_bones)
+        selected_bone_names = list(set(original_bones + deform_bones))
         
         for obj in get_related_meshes(armature):
             mask_group = obj.vertex_groups.get("Solo_Mask")

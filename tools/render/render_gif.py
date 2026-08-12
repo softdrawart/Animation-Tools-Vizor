@@ -250,9 +250,10 @@ class GIF_OT_batch_process(Operator):
 class GIF_PT_panel(Panel):
     bl_label = "GIF Export"
     bl_idname = "RENDER_PT_gif_export"
-    bl_space_type = 'PROPERTIES'
-    bl_region_type = 'WINDOW'
-    bl_context = "render"
+
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_context = "Render"
 
     def draw(self, context):
         layout = self.layout

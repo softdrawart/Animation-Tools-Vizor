@@ -130,10 +130,10 @@ class ANIM_OT_MirrorKeyframesOffset(bpy.types.Operator):
         return {'FINISHED'}
 
 class VIEW3D_PT_MirrorAnimationPanel(bpy.types.Panel):
+    bl_label = "Loop Mirror"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = 'Animation'
-    bl_label = "Loop Mirror"
 
     def draw(self, context):
         layout = self.layout
