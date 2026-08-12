@@ -1,12 +1,3 @@
-bl_info = {
-    "name": "Asset Browser: Action & Preview Tools",
-    "author": "Gemini Assistant",
-    "version": (1, 4),
-    "blender": (3, 4, 0),
-    "location": "Asset Browser > Menus",
-    "description": "Force assign actions, push to NLA, and generate mesh previews.",
-    "category": "Animation",
-}
 
 import bpy
 import os

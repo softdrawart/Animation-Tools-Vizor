@@ -276,6 +276,9 @@ classes = [
 ]
 
 def register():
+    for cls in classes:
+        bpy.utils.register_class(cls)
+        
     scene = bpy.types.Scene
     props = bpy.props
     scene.find_text = props.StringProperty(name="Find", description="Old name")
@@ -284,9 +287,6 @@ def register():
     scene.rename_mirror = props.BoolProperty(name="Rename Mirror", default=False, description="Mirror sides")
     scene.bone_pairs = props.CollectionProperty(type=BonePair)
     scene.bone_pairs_index = props.IntProperty()
-
-    for cls in classes:
-        bpy.utils.register_class(cls)
     
 
 

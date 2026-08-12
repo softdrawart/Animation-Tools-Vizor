@@ -737,6 +737,10 @@ props = [
 ]
         
 def register():
+    
+    for my_class in classes:
+        bpy.utils.register_class(my_class)
+
     bpy.types.WorkSpace.render_panel_props = bpy.props.CollectionProperty(type = RENDER_Props)
     bpy.types.WorkSpace.render_enable_all = bpy.props.BoolProperty(name="", default=False, update=update_enable_all)
     bpy.types.WorkSpace.render_character_name = bpy.props.StringProperty(name="character name", default=CHARACTER_NAME)
@@ -746,8 +750,6 @@ def register():
     bpy.types.WorkSpace.render_current_idx = bpy.props.IntProperty(name="", default=-1)
     bpy.types.WorkSpace.render_finished_ids = bpy.props.StringProperty(name="", default="[]")
     
-    for my_class in classes:
-        bpy.utils.register_class(my_class)
     
 def unregister():
     for my_class in reversed(classes):
