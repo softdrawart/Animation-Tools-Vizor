@@ -10,21 +10,23 @@ bl_info = {
 
 import importlib
 
-module_names = ("tools.animation.animation_mirror",
+module_names = (
            "tools.animation.animation_tab",
            "tools.animation.bake_action",
            "tools.animation.blender_add_on_bone_primitive_placer",
            "tools.animation.clean_curves_markers",
            "tools.animation.mask_selected_geometry",
-           "tools.animation.offset_action_animation",
+           "tools.animation.animation_mirror",
            "tools.animation.update_cursor_location",
            "tools.animation.search_replace_fcurve_data",
            "tools.animation.wiggle_2",
            "tools.fbx.asset_action",
-           "tools.render.render_animation_sequences",
            "tools.render.render_gif",
            "tools.skining.bone_layers",
-           "tools.skining.transfer_vertex_order",)
+           "tools.skining.transfer_vertex_order",
+           "tools.animation.check_blend_version",
+           "tools.skining.skining_tools",
+           "tools.skining.other_tools",)
 
 is_reloading = 'bpy' in locals()
 modules = []

@@ -63,6 +63,8 @@ def get_actual_deform_bone_names(armature, selected_pose_bones):
     all_deform_bones = [b for b in armature.pose.bones if b.bone.use_deform]
     
     for p_bone in selected_pose_bones:
+        if p_bone.name in deform_names or p_bone.bone.use_deform or 'DEF-' in p_bone.name:
+            continue  # Already processed this bone
         # If the selected bone is already a deform bone
         if p_bone.bone.use_deform:
             deform_names.add(p_bone.name)
@@ -82,7 +84,7 @@ def get_actual_deform_bone_names(armature, selected_pose_bones):
             if def_bone.name not in deform_names:
                 if is_controlled_by(def_bone, p_bone.name, armature):
                     deform_names.add(def_bone.name)
-                    
+
     return list(deform_names)
 
 class ANIM_OT_ModifySoloMask(bpy.types.Operator):
@@ -138,7 +140,8 @@ class ANIM_OT_SoloBoneGeometry(bpy.types.Operator):
         original_bones = [b.name for b in context.selected_pose_bones]
         deform_bones = get_actual_deform_bone_names(armature, context.selected_pose_bones)
         selected_bone_names = list(set(original_bones + deform_bones))
-        
+
+
         for obj in get_related_meshes(armature):
             mask_group = obj.vertex_groups.get("Solo_Mask")
             if mask_group: obj.vertex_groups.remove(mask_group)

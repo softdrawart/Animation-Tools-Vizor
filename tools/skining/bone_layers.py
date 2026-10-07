@@ -32,10 +32,6 @@ class WEIGHTPAINT_PT_bone_collections(Panel):
 
     @classmethod
     def poll(cls, context):
-        """
-        Ensures the panel only shows up in Weight Paint mode when a mesh
-        with a valid armature is selected.
-        """
         if context.mode != 'PAINT_WEIGHT':
             return False
         mesh = context.active_object
@@ -50,8 +46,7 @@ class WEIGHTPAINT_PT_bone_collections(Panel):
         if not armature_obj:
             return False
         
-        if armature_obj not in context.selected_objects:
-            return False
+        
         
         return True
 
