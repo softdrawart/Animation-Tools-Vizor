@@ -111,7 +111,95 @@ class MIRROR_WEIGHTS_OT_VIZOR(bpy.types.Operator):
             
         return {'FINISHED'}
 
-class VIEW3D_PT_mirror_weights(bpy.types.Panel):
+class MESH_RemoveNonDeformVGroups_OT_VIZOR(bpy.types.Operator):
+    """Remove all vertex groups not associated with a deforming bone in the armature(s)"""
+    bl_idname = "mesh.remove_non_deform_vgroups"
+    bl_label = "Remove Non-Deform Vertex Groups"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return any(obj.type == 'MESH' for obj in context.selected_objects)
+
+    def execute(self, context):
+        # Filter selection to meshes only
+        selected_meshes = [obj for obj in context.selected_objects if obj.type == 'MESH']
+        
+        total_removed_count = 0
+        processed_objects_count = 0
+
+        for obj in selected_meshes:
+            # 1. Find all armature modifiers for THIS specific object
+            arm_modifiers = [m for m in obj.modifiers if m.type == 'ARMATURE' and m.object]
+            
+            # Skip this object if it has no armatures assigned
+            if not arm_modifiers:
+                continue
+                
+            # 2. Build a set of all valid deform bone names from all attached armatures
+            deform_bone_names = set()
+            for mod in arm_modifiers:
+                arm_obj = mod.object
+                for bone in arm_obj.data.bones:
+                    if bone.use_deform:
+                        deform_bone_names.add(bone.name)
+
+            # 3. Identify vertex groups on this mesh that are NOT in the deform set
+            vgroups_to_remove = [vg for vg in obj.vertex_groups if vg.name not in deform_bone_names]
+
+            # 4. Remove the groups
+            if vgroups_to_remove:
+                processed_objects_count += 1
+                for vg in vgroups_to_remove:
+                    obj.vertex_groups.remove(vg)
+                    total_removed_count += 1
+            
+        # Final report
+        self.report(
+            {'INFO'}, 
+            f"Processed {processed_objects_count} objects. Removed {total_removed_count} vertex groups."
+        )
+        
+        return {'FINISHED'}
+class CLEAR_EMPTY_WEIGHTS_OT_VIZOR(bpy.types.Operator):
+    bl_idname = "skin.clear_empty_weights"
+    bl_label = "clear empty weights from object"
+    bl_description = "clear empty weights from object"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    threshold: bpy.props.FloatProperty(default=0, min=0, max=1)
+
+    def find_weights(self, obj):
+        maxWeight = {}
+        for i in obj.vertex_groups:
+            maxWeight[i.index] = 0
+
+        for v in obj.data.vertices:
+            for g in v.groups:
+                gn = g.group
+                w = obj.vertex_groups[gn].weight(v.index)
+                if (maxWeight.get(gn) is None or w>maxWeight[gn]):
+                    maxWeight[gn] = w
+        return maxWeight
+    def remove_empty_weights(self, obj):
+        maxWeight = self.find_weights(obj)
+        # fix bug pointed out by user2859
+        ka = []
+        ka.extend(maxWeight.keys())
+        ka.sort(key=lambda gn: -gn)
+        print (ka)
+        for gn in ka:
+            if maxWeight[gn]<=self.threshold:
+                print ("delete %d"%gn)
+                obj.vertex_groups.remove(obj.vertex_groups[gn]) # actually remove the group
+
+    def execute(self, context):
+        obj = context.active_object
+        for obj in [obj for obj in context.selected_objects if obj.type=='MESH']:
+            self.remove_empty_weights(obj)
+        return {'FINISHED'}
+
+class VIEW3D_PT_other_tools(bpy.types.Panel):
     """Creates a Panel in the 3D Viewport UI sidebar"""
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
@@ -131,12 +219,15 @@ class VIEW3D_PT_mirror_weights(bpy.types.Panel):
         # --- CUSTOM TOOLS ---
         layout.label(text="Custom Tools:")
         layout.operator("animation.mirror_skin_weights", text="Mirror Skin Weights", icon='MOD_MIRROR')
-
+        layout.operator("mesh.remove_non_deform_vgroups", text="Remove Non-Deform Vertex Groups", icon='X')
+        layout.operator("skin.clear_empty_weights", text="Clear Empty Weights", icon='X')
 
 # List of classes to register
 classes = (
     MIRROR_WEIGHTS_OT_VIZOR,
-    VIEW3D_PT_mirror_weights,
+    CLEAR_EMPTY_WEIGHTS_OT_VIZOR,
+    VIEW3D_PT_other_tools,
+    MESH_RemoveNonDeformVGroups_OT_VIZOR,
 )
 
 def register():
@@ -145,7 +236,10 @@ def register():
 
 def unregister():
     for cls in reversed(classes):
-        bpy.utils.unregister_class(cls)
+        try:
+            bpy.utils.unregister_class(cls)
+        except RuntimeError:
+            pass
 
 if __name__ == "__main__":
     register()

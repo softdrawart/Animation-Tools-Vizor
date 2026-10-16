@@ -1,8 +1,7 @@
-
-
 import bpy, bmesh
 from mathutils import Vector, kdtree
 import math, os
+from .utils import get_all_fcurves, find_fcurve, remove_fcurve
 
 ######################################################
 # Panel
@@ -17,39 +16,84 @@ class VIZOR_ANIMATION_PT_VIZOR(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         
+        # --- RIGGING & BONES ---
+        layout.label(text="Rigging & Bones", icon='BONE_DATA')
         box = layout.box()
-        box.operator(RESET_STRETCH_OT_VIZOR.bl_idname, text = "Reset Stretch Constraints")
-        box.operator(RESET_TRANSFORM_OT_VIZOR.bl_idname, text = "Reset Transforms")
-        box.operator(CLEAR_VGROUPS_OT_VIZOR.bl_idname, text = "Clear Vertex Groups")
-        box.operator(MOVE_ARMATURE_UP_OT_VIZOR.bl_idname, text = "Move Armatures Up")
-        box.operator(SELECT_DEF_BONES_OT_VIZOR.bl_idname, text = "Select Deformation Bones")
-        box.operator(SELECT_CTRL_BONES_OT_VIZOR.bl_idname, text = "Select Controller Bones")
-        box.operator(COPY_BONES_POSITION_OT_VIZOR.bl_idname, text = "Copy Bones Position")
-        box.operator(SELECT_VGROUP_BONES_OT_VIZOR.bl_idname, text = "Select Vertex Group Bones")
-        box.operator(COPY_SHAPE_KEYS_OT_VIZOR.bl_idname, text = "Copy All Shape Keys")
-        box.operator(CLEAR_MISSING_CHANNELS_OT_VIZOR.bl_idname, text = "Clear Missing Channels")
-        box.operator(OFFSET_KEYFRAMES_OT_VIZOR.bl_idname, text = "Offset selected channels keyframes")
-        box.operator(MIRROR_WEIGHTS_OT_VIZOR.bl_idname, text = "Mirror Weights")
-        box.operator(REMOVE_CORRUPTED_PACKED_FILES_OT_VIZOR.bl_idname, text = "Remove Corrupted Images")
-        box.operator(CLEAR_EMMPTY_WEIGHTS_OT_VIZOR.bl_idname, text = "Remove empty weights")
-        box.operator(COLLECT_WGTS_OT_VIZOR.bl_idname, text = "Collect WGTs")
-        box.operator(APPLY_ARMATURE_OT_VIZOR.bl_idname, text = "Apply Armature Modifiers")
-        box.operator(FIND_CONCAVE_POLY_OT_VIZOR.bl_idname, text = "Find Concave Polygons")
-        box.operator(COPY_NLA_OT_VIZOR.bl_idname, text = "Copy NLA")
-        box.operator(SCALE_ANIMATION_OT_VIZOR.bl_idname, text = "Scale Animation")
-        box.operator(CONNECT_BONES_TO_MESH_OT_VIZOR.bl_idname, text = "Connect bones to mesh")
-        box.operator(TRANSFER_WEIGHTS_TO_LATTICE_OT_VIZOR.bl_idname, text = "Transfer mesh weights to lattice")
-        box.operator(OBJECT_OT_surface_deform_setup.bl_idname, text = "Surface Deform selected objects")
-        box.operator(CLEAN_UP_SCENE_OT_VIZOR.bl_idname, text = "Clean up Scene")
-        box.operator(ALIGN_TO_WORLD_AXIS_OT_VIZOR.bl_idname, text = "Align to world axis")
-        box.operator(ANIM_OT_clean_bone_channels_VIZOR.bl_idname, text = "Remove extra channels")
-        box.operator(ResetIKStretch_OT_VIZOR.bl_idname, text = "Reset IK Stretch")
-        box.operator(POSE_OT_MaintainVolumeAnimation_OR_VIZOR.bl_idname, text = "Maintain Volume Animation")
-        box.operator(POSE_SwapAnimationChannels_OT_VIZOR.bl_idname, text = "Swap animation channels")
-        box.operator(IMAGE_downscale_all_OT_VIZOR.bl_idname, text = "Downscale images")
-        box.operator(NLA_SetPreviewRangeToStrips_OT_VIZOR.bl_idname, text = "Set Animation Range to NLA track")
-        box.operator(MESH_RemoveNonDeformVGroups_OT_VIZOR.bl_idname, text = "Remove Non-Deform Vertex Groups")
         
+        row = box.row()
+        row.operator("animation.select_bones_by_type", text="Select Def").bone_type = 'DEF'
+        row.operator("animation.select_bones_by_type", text="Select Ctrl").bone_type = 'CTRL'
+        
+        row = box.row()
+        row.operator(COPY_BONES_POSITION_OT_VIZOR.bl_idname, text="Copy Position")
+        row.operator(ALIGN_TO_WORLD_AXIS_OT_VIZOR.bl_idname, text="Align Axis")
+
+        row = box.row()
+        row.operator(CONNECT_BONES_TO_MESH_OT_VIZOR.bl_idname, text="Connect to Mesh")
+        row.operator(COLLECT_WGTS_OT_VIZOR.bl_idname, text="Collect WGTs")
+
+        # --- SKINNING & WEIGHTS ---
+        layout.label(text="Skinning & Weights", icon='MOD_ARMATURE')
+        box = layout.box()
+        
+        row = box.row()
+        row.operator(CLEAR_VGROUPS_OT_VIZOR.bl_idname, text="Clear All VGs")
+        row.operator(MESH_RemoveNonDeformVGroups_OT_VIZOR.bl_idname, text="Rm Non-Def VGs")
+        
+        row = box.row()
+        row.operator(CLEAR_EMMPTY_WEIGHTS_OT_VIZOR.bl_idname, text="Clear Empty")
+        row.operator(MIRROR_WEIGHTS_OT_VIZOR.bl_idname, text="Mirror Weights")
+
+        row = box.row()
+        row.operator(TRANSFER_WEIGHTS_TO_LATTICE_OT_VIZOR.bl_idname, text="Mesh \u2192 Lattice")
+        row.operator(SELECT_VGROUP_BONES_OT_VIZOR.bl_idname, text="Sel VG Bones")
+
+        row = box.row()
+        row.operator(APPLY_ARMATURE_OT_VIZOR.bl_idname, text="Apply Armature")
+        row.operator(OBJECT_OT_surface_deform_setup.bl_idname, text="Surf Deform")
+        
+        row = box.row()
+        row.operator(MOVE_ARMATURE_UP_OT_VIZOR.bl_idname, text="Move Armature Up")
+
+        # --- ANIMATION & NLA ---
+        layout.label(text="Animation & NLA", icon='ACTION')
+        box = layout.box()
+        
+        row = box.row()
+        row.operator(ANIM_OT_clean_bone_channels_VIZOR.bl_idname, text="Clean Channels")
+        row.operator(CLEAR_MISSING_CHANNELS_OT_VIZOR.bl_idname, text="Missing Chans")
+        
+        row = box.row()
+        row.operator(OFFSET_KEYFRAMES_OT_VIZOR.bl_idname, text="Offset Keys")
+        row.operator(SCALE_ANIMATION_OT_VIZOR.bl_idname, text="Scale Anim")
+        
+        row = box.row()
+        row.operator(POSE_SwapAnimationChannels_OT_VIZOR.bl_idname, text="Swap Chans")
+        row.operator(POSE_OT_MaintainVolumeAnimation_OR_VIZOR.bl_idname, text="Maintain Vol")
+
+        row = box.row()
+        row.operator(COPY_NLA_OT_VIZOR.bl_idname, text="Copy NLA")
+        row.operator(NLA_SetPreviewRangeToStrips_OT_VIZOR.bl_idname, text="Set Preview")
+        
+        row = box.row()
+        row.operator(RESET_STRETCH_OT_VIZOR.bl_idname, text="Reset Stretch")
+        row.operator(ResetIKStretch_OT_VIZOR.bl_idname, text="Reset NLA IK")
+
+        # --- UTILITY & CLEANUP ---
+        layout.label(text="Utility & Cleanup", icon='MODIFIER')
+        box = layout.box()
+        
+        row = box.row()
+        row.operator(RESET_TRANSFORM_OT_VIZOR.bl_idname, text="Reset Transform")
+        row.operator(COPY_SHAPE_KEYS_OT_VIZOR.bl_idname, text="Copy Shape Keys")
+        
+        row = box.row()
+        row.operator(FIND_CONCAVE_POLY_OT_VIZOR.bl_idname, text="Find Concave")
+        row.operator(CLEAN_UP_SCENE_OT_VIZOR.bl_idname, text="Clean Scene")
+        
+        row = box.row()
+        row.operator(REMOVE_CORRUPTED_PACKED_FILES_OT_VIZOR.bl_idname, text="Rm Bad Images")
+        row.operator(IMAGE_downscale_all_OT_VIZOR.bl_idname, text="Downscale Imgs")
         
         
         
@@ -268,8 +312,8 @@ class POSE_SwapAnimationChannels_OT_VIZOR(bpy.types.Operator):
             data_path = f'pose.bones["{bone.name}"].{self.transform_type}'
             
             # Find existing F-Curves
-            f_a = action.fcurves.find(data_path, index=idx_a)
-            f_b = action.fcurves.find(data_path, index=idx_b)
+            f_a = find_fcurve(action, data_path, idx_a)
+            f_b = find_fcurve(action, data_path, idx_b)
 
             if not f_a and not f_b:
                 continue
@@ -324,22 +368,17 @@ class ANIM_OT_clean_bone_channels_VIZOR(bpy.types.Operator):
         keep_keywords = ["location", "rotation_quaternion", "rotation_euler", "scale"]
         
         # We iterate backwards to safely remove items from the collection
-        fcurves = action.fcurves
+        fcurves = get_all_fcurves(action)
         initial_count = len(fcurves)
         
-        for i in range(len(fcurves) - 1, -1, -1):
-            fcurve = fcurves[i]
+        for fcurve in fcurves:
             data_path = fcurve.data_path
-            
-            # Check if this F-Curve belongs to one of our selected bones
-            # Path format: pose.bones["BoneName"].channel
             if any(f'pose.bones["{name}"]' in data_path for name in selected_bone_names):
-                
-                # Check if it's a transform channel
                 is_transform = any(k in data_path for k in keep_keywords)
-                
                 if not is_transform:
-                    fcurves.remove(fcurve)
+                    remove_fcurve(action, fcurve)
+
+        self.report({'INFO'}, "Cleaned non-transform channels.")
 
         self.report({'INFO'}, f"Cleaned {initial_count - len(fcurves)} non-transform channels.")
         return {'FINISHED'}
@@ -349,6 +388,10 @@ class RESET_STRETCH_OT_VIZOR(bpy.types.Operator):
     bl_label = "Reset Stretch Parameter of all selected bones"
     bl_description = "Reset Stretch Parameter of all selected bones"
     bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return context.mode == 'POSE' and context.active_object and context.active_object.type == 'ARMATURE' and context.selected_pose_bones
     
     def execute(self, context):
         bones = context.selected_pose_bones
@@ -368,6 +411,10 @@ class RESET_TRANSFORM_OT_VIZOR(bpy.types.Operator):
     bl_label = "Reset Geometry Transformation, remove shape keys, and clear parents"
     bl_description = "Reset Geometry Transformation, remove shape keys, and clear parents"
     bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return bool(context.selected_objects)
     
     def execute(self, context):
         # Get the selected objects
@@ -417,6 +464,10 @@ class CLEAR_VGROUPS_OT_VIZOR(bpy.types.Operator):
     bl_label = "remove all vertex groups"
     bl_description = "remove all vertex groups"
     bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return bool(context.selected_objects)
     
     def execute(self, context):
         objects = context.selected_objects
@@ -434,6 +485,10 @@ class MOVE_ARMATURE_UP_OT_VIZOR(bpy.types.Operator):
     bl_label = "move armature modifier up the stack"
     bl_description = "move armature modifier up the stack"
     bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return bool(context.selected_editable_objects)
     
     def execute(self, context):
         objects = context.selected_editable_objects
@@ -458,6 +513,12 @@ class SELECT_VGROUP_BONES_OT_VIZOR(bpy.types.Operator):
     bl_label = "select all deformation bones of the mesh"
     bl_description = "select all deformation bones of the mesh"
     bl_options = {'REGISTER', 'UNDO'}
+    
+    @classmethod
+    def poll(cls, context):
+        return (len(context.selected_objects) == 2 and 
+                any(obj.type == 'ARMATURE' for obj in context.selected_objects) and 
+                any(obj.type == 'MESH' for obj in context.selected_objects))
     
     def execute(self, context):
         # Get the selected armature and mesh
@@ -501,95 +562,53 @@ class SELECT_VGROUP_BONES_OT_VIZOR(bpy.types.Operator):
             print('plse select a mesh and armature')
             return {'CANCELLED'}
 
-class SELECT_DEF_BONES_OT_VIZOR(bpy.types.Operator):
-    bl_idname = "animation.select_def_bones"
-    bl_label = "select all bones with ctrl prefix or shape assigned"
-    bl_description = "select all bones with ctrl prefix or shape assigned"
+class SELECT_BONES_BY_TYPE_OT_VIZOR(bpy.types.Operator):
+    bl_idname = "animation.select_bones_by_type"
+    bl_label = "Select Bones By Type"
+    bl_description = "Select bones based on naming prefix or properties"
     bl_options = {'REGISTER', 'UNDO'}
     
-    def execute(self, context):
-        # Get the selected armature
-        armature = None
-        
-        if (len(context.selected_objects) == 1):
-            if (context.selected_objects[0].type == 'ARMATURE'):
-                armature = context.selected_objects[0]
-            else:
-                print('plese select armature object!')
-                return {'CANCELLED'}
-            print(f'armature object: {armature.name} selected!')
-        else:
-            print('plese select only one object armature type')
-            return {'CANCELLED'}
-        if (armature):
-            #de-select all pose bones
-            bpy.ops.object.select_all(action='DESELECT')
-            armature.select_set(True)
-            context.view_layer.objects.active = armature
-            bpy.ops.object.mode_set(mode='POSE')
-            bpy.ops.pose.select_all(action='DESELECT')
-            bpy.ops.object.mode_set(mode='OBJECT')
-            bpy.ops.object.select_all(action='DESELECT')
-            
-            # Loop through the bones and check
-            for bone in armature.pose.bones:
-                # Check if the bone has ctrl in name of has a shape assigned
-                if 'def' in bone.name.lower() or bone.bone.use_deform == True:
-                    # Select the bone
-                    bone.bone.select = True
-                    print(f'selected def pose bone: {bone.name}')
-            return {'FINISHED'}
-        else:
-            print('plse select at least one armature object')
-            return {'CANCELLED'}
+    bone_type: bpy.props.EnumProperty(
+        items=[('DEF', "Deform", ""), ('CTRL', "Control", "")]
+    )
 
-class SELECT_CTRL_BONES_OT_VIZOR(bpy.types.Operator):
-    bl_idname = "animation.select_ctrl_bones"
-    bl_label = "select all bones with ctrl prefix or shape assigned"
-    bl_description = "select all bones with ctrl prefix or shape assigned"
-    bl_options = {'REGISTER', 'UNDO'}
+    @classmethod
+    def poll(cls, context):
+        return context.active_object and context.active_object.type == 'ARMATURE'
     
     def execute(self, context):
-        # Get the selected armature
-        armature = None
+        armature = context.active_object
         
-        if (len(context.selected_objects) == 1):
-            if (context.selected_objects[0].type == 'ARMATURE'):
-                armature = context.selected_objects[0]
-            else:
-                print('plese select armature object!')
-                return {'CANCELLED'}
-            print(f'armature object: {armature.name} selected!')
-        else:
-            print('plese select only one object armature type')
-            return {'CANCELLED'}
-        if (armature):
-            #de-select all pose bones
-            bpy.ops.object.select_all(action='DESELECT')
-            armature.select_set(True)
-            context.view_layer.objects.active = armature
-            bpy.ops.object.mode_set(mode='POSE')
-            bpy.ops.pose.select_all(action='DESELECT')
-            bpy.ops.object.mode_set(mode='OBJECT')
-            bpy.ops.object.select_all(action='DESELECT')
-            
-            # Loop through the bones and check
-            for bone in armature.pose.bones:
-                # Check if the bone has ctrl in name of has a shape assigned
-                if 'ctrl' in bone.name.lower() or bone.custom_shape:
-                    # Select the bone
+        # Deselect all pose bones first safely
+        bpy.ops.object.mode_set(mode='POSE')
+        bpy.ops.pose.select_all(action='DESELECT')
+        bpy.ops.object.mode_set(mode='OBJECT')
+        
+        count = 0
+        for bone in armature.pose.bones:
+            if self.bone_type == 'DEF':
+                if 'def' in bone.name.lower() or bone.bone.use_deform:
                     bone.bone.select = True
-                    print(f'selected ctrl pose bone: {bone.name}')
-            return {'FINISHED'}
-        else:
-            print('plse select at least one armature object')
-            return {'CANCELLED'}
+                    count += 1
+            elif self.bone_type == 'CTRL':
+                if 'ctrl' in bone.name.lower() or bone.custom_shape:
+                    bone.bone.select = True
+                    count += 1
+
+        self.report({'INFO'}, f"Selected {count} {self.bone_type} bones.")
+        return {'FINISHED'}
 
 class COPY_BONES_POSITION_OT_VIZOR(bpy.types.Operator):
     bl_idname = "animation.copy_bones_position"
     bl_label = "copy bone position from selected to active"
     bl_description = "copy bone position from selected to active"
     bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return (len(context.selected_objects) == 2 and 
+                all(obj.type == 'ARMATURE' for obj in context.selected_objects) and 
+                context.active_object in context.selected_objects)
     
     def execute(self, context):
         # Get the selected armature
@@ -707,6 +726,11 @@ class CLEAR_MISSING_CHANNELS_OT_VIZOR(bpy.types.Operator):
     bl_label = "clears missing channels from active Armature object"
     bl_description = "clears missing channels from active Armature object"
     bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return obj and obj.type == 'ARMATURE' and obj.animation_data and obj.animation_data.action
     
     def execute(self, context):
         # Get the active action in the Action Editor
@@ -716,7 +740,8 @@ class CLEAR_MISSING_CHANNELS_OT_VIZOR(bpy.types.Operator):
         channels_to_remove = []
 
         # Iterate over each F-Curve in the action
-        for fcurve in action.fcurves:
+        fcurves = get_all_fcurves(action)
+        for fcurve in fcurves:
             # Check if the RNA data path contains "pose.bones"
             if "pose.bones" in fcurve.data_path:
                 # Extract the bone name from the RNA data path
@@ -728,7 +753,7 @@ class CLEAR_MISSING_CHANNELS_OT_VIZOR(bpy.types.Operator):
 
         # Remove the channels with missing pose bones
         for fcurve in channels_to_remove:
-            action.fcurves.remove(fcurve)
+            remove_fcurve(action, fcurve)
         return {'FINISHED'}
 
 class OFFSET_KEYFRAMES_OT_VIZOR(bpy.types.Operator):
@@ -736,13 +761,19 @@ class OFFSET_KEYFRAMES_OT_VIZOR(bpy.types.Operator):
     bl_label = "offsets selected channels keyframes based on the first keyframe"
     bl_description = "offsets selected channels keyframes based on the first keyframe"
     bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object
+        return obj and obj.animation_data and obj.animation_data.action
     
     def execute(self, context):
         # Get the active object
         obj = context.active_object
 
         # Get the selected channels
-        selected_channels = [f for f in obj.animation_data.action.fcurves if f.select and f.keyframe_points[0].co[0] == -1 and f.keyframe_points[0].select_control_point]
+        all_fcurves = get_all_fcurves(obj.animation_data.action)
+        selected_channels = [f for f in all_fcurves if f.select and f.keyframe_points[0].co[0] == -1 and f.keyframe_points[0].select_control_point]
         
         if selected_channels is None:
             print("plese select animation channels!")
@@ -769,6 +800,10 @@ class MIRROR_WEIGHTS_OT_VIZOR(bpy.types.Operator):
     bl_label = "mirror all skin weights"
     bl_description = "mirror all skin weights"
     bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return context.active_object and context.active_object.type == 'MESH'
     
     def execute(self, context):
         # Get the active object (assuming it's a mesh)
@@ -903,6 +938,11 @@ class REMOVE_CORRUPTED_PACKED_FILES_OT_VIZOR(bpy.types.Operator):
     bl_description = "remove corrupted packed files"
     bl_options = {'REGISTER', 'UNDO'}
     
+    @classmethod
+    def poll(cls, context):
+        # Always return True as it operates globally on bpy.data.images
+        return True
+    
     def execute(self, context):
         # Iterate over all images
         for img in bpy.data.images:
@@ -946,7 +986,11 @@ class CLEAR_EMMPTY_WEIGHTS_OT_VIZOR(bpy.types.Operator):
             if maxWeight[gn]<=self.threshold:
                 print ("delete %d"%gn)
                 obj.vertex_groups.remove(obj.vertex_groups[gn]) # actually remove the group
-
+    
+    @classmethod
+    def poll(cls, context):
+        return context.active_object and any(obj.type == 'MESH' for obj in context.selected_objects)
+    
     def execute(self, context):
         obj = context.active_object
         for obj in [obj for obj in context.selected_objects if obj.type=='MESH']:
@@ -1208,7 +1252,7 @@ class SCALE_ANIMATION_OT_VIZOR(bpy.types.Operator):
 
         action = context.active_object.animation_data.action
 
-        for fcurve in action.fcurves:
+        for fcurve in get_all_fcurves(action):
             # Only affect location channels (X, Y, Z)
             if "location" in fcurve.data_path:
                 for keyframe_point in fcurve.keyframe_points:
@@ -1324,6 +1368,10 @@ class OBJECT_OT_surface_deform_setup(bpy.types.Operator):
     bl_idname = "object.surface_deform_setup"
     bl_label = "Setup Surface Deform"
     bl_options = {'REGISTER', 'UNDO'}
+        
+    @classmethod
+    def poll(cls, context):
+        return context.active_object and context.active_object.type == 'MESH' and len(context.selected_objects) >= 2
 
     def execute(self, context):
         active = context.active_object
@@ -1595,21 +1643,21 @@ class POSE_OT_MaintainVolumeAnimation_OR_VIZOR(bpy.types.Operator):
         # Determine secondary axes
         secondary_indices = [i for i in range(3) if i != primary_idx]
 
+        all_fcurves = get_all_fcurves(action)
         for bone in selected_bones:
             data_path = f'pose.bones["{bone.name}"].scale'
             
             # 1. Find the primary F-Curve
-            primary_fcurve = next((fc for fc in action.fcurves if fc.data_path == data_path and fc.array_index == primary_idx), None)
+            primary_fcurve = next((fc for fc in all_fcurves if fc.data_path == data_path and fc.array_index == primary_idx), None)
             
             if not primary_fcurve:
-                self.report({'INFO'}, f"No scale keyframes for bone {bone.name} on selected axis. Skipping.")
                 continue
 
             # 2. Clear existing keyframes on secondary scale channels
             for s_idx in secondary_indices:
-                fc_to_remove = next((fc for fc in action.fcurves if fc.data_path == data_path and fc.array_index == s_idx), None)
+                fc_to_remove = next((fc for fc in all_fcurves if fc.data_path == data_path and fc.array_index == s_idx), None)
                 if fc_to_remove:
-                    action.fcurves.remove(fc_to_remove)
+                    remove_fcurve(action, fc_to_remove)
 
             # 3. Iterate through primary keyframes and calculate secondary values
             # We collect frame and value pairs first to avoid issues during insertion
@@ -1700,8 +1748,7 @@ classes = (
             REMOVE_CORRUPTED_PACKED_FILES_OT_VIZOR,
             RESET_TRANSFORM_OT_VIZOR,
             MOVE_ARMATURE_UP_OT_VIZOR,
-            SELECT_DEF_BONES_OT_VIZOR,
-            SELECT_CTRL_BONES_OT_VIZOR,
+            SELECT_BONES_BY_TYPE_OT_VIZOR,
             SELECT_VGROUP_BONES_OT_VIZOR,
             COPY_BONES_POSITION_OT_VIZOR,
             CLEAR_MISSING_CHANNELS_OT_VIZOR,
@@ -1737,7 +1784,10 @@ def register():
         
 def unregister():
     for my_class in reversed(classes):
-        bpy.utils.unregister_class(my_class)
+        try:
+            bpy.utils.unregister_class(my_class)
+        except Exception:
+            pass
             
 if __name__ == '__main__':
     register()

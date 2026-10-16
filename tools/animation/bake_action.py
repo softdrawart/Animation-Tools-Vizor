@@ -1,5 +1,5 @@
-
 import bpy
+from .utils import *
 
 def update_action_list(self, context):
     items = []
@@ -23,6 +23,7 @@ def update_action_list(self, context):
         return [("None", "None", "")]
         
     return items
+
 
 class BakeAction_PT(bpy.types.Panel):
     bl_idname = "OBJECT_PT_bake_action"
@@ -57,23 +58,30 @@ class BakeAction_OT(bpy.types.Operator):
         # Get the active object
         obj = context.active_object
 
-        # Set the active action to the source action
-        source_action = bpy.data.actions[context.scene.source_action]
+        # Avoid KeyError if actions don't exist or 'None' is passed
+        if context.scene.source_action not in bpy.data.actions or context.scene.destination_action not in bpy.data.actions:
+            self.report({'ERROR'}, "Invalid Source or Destination action.")
+            return {'CANCELLED'}
 
-        # Set the selected action to the destination action
+        source_action = bpy.data.actions[context.scene.source_action]
         destination_action = bpy.data.actions[context.scene.destination_action]
         
-        #check if source and destination actions are the same
-        if source_action == destination_action or source_action == None or destination_action == None:
-            print("Error: please select source and destination actions that are not similar!")
+        # Check if source and destination actions are the same
+        if source_action == destination_action or source_action is None or destination_action is None:
+            self.report({'ERROR'}, "Please select source and destination actions that are different!")
             return {'CANCELLED'}
         
-        # Loop through each f-curve of the selected action
-        for fcurve in destination_action.fcurves:
-            # check if there are similar f-curve in active action
-            active_fcurve = source_action.fcurves.find(fcurve.data_path, index=fcurve.array_index)
+        # Use our version-agnostic helper to get f-curves from the destination action
+        dest_fcurves = get_all_fcurves(destination_action)
+
+        # Loop through each f-curve of the selected destination action
+        for fcurve in dest_fcurves:
+            # Use our version-agnostic helper to find the corresponding f-curve in the source action
+            active_fcurve = find_fcurve(source_action, fcurve.data_path, fcurve.array_index)
+            
             if not active_fcurve:
                 continue
+                
             # Loop over each keyframe of the f-curve
             for keyframe in fcurve.keyframe_points:
                 # Calculate the offset between the two keyframes
@@ -100,17 +108,22 @@ def register():
         items=update_action_list, 
         name="Destination Action"
     )
-    for my_class in classes:
-        bpy.utils.register_class(my_class)
+    for cls in classes:
+        bpy.utils.register_class(cls)
     
-   
-
 def unregister():
-    for my_class in reversed(classes):
-        bpy.utils.unregister_class(my_class)
+    for cls in reversed(classes):
+        try:
+            bpy.utils.unregister_class(cls)
+        except RuntimeError:
+            pass
+    try:
+        del bpy.types.Scene.source_action
+        del bpy.types.Scene.destination_action
+    except AttributeError:
+        pass
         
-    del bpy.types.Scene.source_action
-    del bpy.types.Scene.destination_action
+    
 
 if __name__ == "__main__":
     register()

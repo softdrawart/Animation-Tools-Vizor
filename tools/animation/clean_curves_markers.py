@@ -1,5 +1,6 @@
 
 import bpy
+from .utils import * 
 
 class ANIM_OT_bake_to_markers(bpy.types.Operator):
     """Keyframe selected bones at markers and remove all other frames"""
@@ -48,7 +49,7 @@ class ANIM_OT_bake_to_markers(bpy.types.Operator):
             action = obj.animation_data.action
             bone_names = [f'pose.bones["{b.name}"]' for b in selected_bones]
             
-            for fcurve in action.fcurves:
+            for fcurve in get_all_fcurves(action):
                 # Check if this F-Curve belongs to one of the selected bones
                 if any(fcurve.data_path.startswith(bone_path) for bone_path in bone_names):
                     points = fcurve.keyframe_points
