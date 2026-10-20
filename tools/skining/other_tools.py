@@ -1,5 +1,5 @@
 import bpy
-
+import bmesh
 class MIRROR_WEIGHTS_OT_VIZOR(bpy.types.Operator):
     bl_idname = "animation.mirror_skin_weights"
     bl_label = "mirror all skin weights"
@@ -56,16 +56,17 @@ class MIRROR_WEIGHTS_OT_VIZOR(bpy.types.Operator):
         # Loop through the vertex group names
         for old_group_name in vertex_group_names:
             # Check if this vertex group corresponds to a bone in the armature
-            bone = armature_obj.data.bones.get(old_group_name)
+            bone = armature_obj.pose.bones.get(old_group_name)
+            def_bone = armature_obj.data.bones.get(old_group_name)
             if not bone:
                 continue
                 
             # Must be a deformation bone
-            if not bone.use_deform:
+            if not def_bone.use_deform:
                 continue
                 
             # If 'all' is False, only process selected bones
-            if not self.all and not bone.select:
+            if not self.all and bone and not bone.select:
                 continue
 
             new_group_name = None
@@ -109,6 +110,128 @@ class MIRROR_WEIGHTS_OT_VIZOR(bpy.types.Operator):
             context.active_object.vertex_groups.active.name = new_group_name
             print(f"Weight group {new_group_name} mirrored and duplicated.")
             
+        return {'FINISHED'}
+
+class MESH_OT_selected_vertices_bisect_mirror_weights(bpy.types.Operator):
+    """Mirror weights automatically to the selected side using a bisected duplicate"""
+    bl_idname = "mesh.selected_vertices_bisect_mirror_weights"
+    bl_label = "Selected Vertices Bisect Mirror Weights"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    mirror_axis: bpy.props.EnumProperty(
+        name="Mirror Axis",
+        description="Axis to mirror and bisect across",
+        items=[
+            ('X', "X", "Mirror across X axis"),
+            ('Y', "Y", "Mirror across Y axis"),
+            ('Z', "Z", "Mirror across Z axis"),
+        ],
+        default='X'
+    )
+
+    @classmethod
+    def poll(cls, context):
+        return context.mode == 'EDIT_MESH' and context.active_object is not None and context.active_object.type == 'MESH'
+
+    def execute(self, context):
+        orig_obj = context.active_object
+        scene = context.scene
+
+        # 1. Evaluate vertex selection sides using bmesh
+        bm = bmesh.from_edit_mesh(orig_obj.data)
+        
+        axis_index = {'X': 0, 'Y': 1, 'Z': 2}[self.mirror_axis]
+        has_positive = False
+        has_negative = False
+        
+        selected_verts = [v for v in bm.verts if v.select]
+        if not selected_verts:
+            self.report({'ERROR'}, "No vertices selected.")
+            return {'CANCELLED'}
+
+        for v in selected_verts:
+            val = v.co[axis_index]
+            if val > 0.0001:
+                has_positive = True
+            elif val < -0.0001:
+                has_negative = True
+
+        if has_positive and has_negative:
+            self.report({'ERROR'}, "Both sides selected! Please select vertices on only one side of the axis.")
+            return {'CANCELLED'}
+        
+        if not has_positive and not has_negative:
+            self.report({'ERROR'}, "Selected vertices are perfectly centered on the mirror axis.")
+            return {'CANCELLED'}
+
+        # Blender mirrors + to - by default. 
+        # If selection is positive, we need to copy from negative, so we must flip the bisect.
+        auto_flip = has_positive 
+
+        # 2. Switch to Object Mode to safely duplicate
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+        # 3. Duplicate the active mesh object
+        bpy.ops.object.select_all(action='DESELECT')
+        orig_obj.select_set(True)
+        context.view_layer.objects.active = orig_obj
+        
+        bpy.ops.object.duplicate(linked=False)
+        dup_obj = context.active_object
+        dup_obj.name = orig_obj.name + "_Bisect_Temp"
+
+        # 4. Add and configure the Mirror modifier
+        mod = dup_obj.modifiers.new(name="WeightBisectMirror", type='MIRROR')
+        
+        mod.use_axis[0] = (self.mirror_axis == 'X')
+        mod.use_axis[1] = (self.mirror_axis == 'Y')
+        mod.use_axis[2] = (self.mirror_axis == 'Z')
+        
+        mod.use_bisect_axis[0] = (self.mirror_axis == 'X')
+        mod.use_bisect_axis[1] = (self.mirror_axis == 'Y')
+        mod.use_bisect_axis[2] = (self.mirror_axis == 'Z')
+        
+        mod.use_bisect_flip_axis[0] = (self.mirror_axis == 'X' and auto_flip)
+        mod.use_bisect_flip_axis[1] = (self.mirror_axis == 'Y' and auto_flip)
+        mod.use_bisect_flip_axis[2] = (self.mirror_axis == 'Z' and auto_flip)
+        
+        mod.use_clip = True
+
+        # 5. Apply the Mirror modifier
+        bpy.ops.object.modifier_apply(modifier=mod.name)
+
+        # 6. Setup for the Proximity Weight Transfer
+        prev_source_obj = scene.weight_source_object
+        scene.weight_source_object = dup_obj
+
+        # Target original object
+        bpy.ops.object.select_all(action='DESELECT')
+        orig_obj.select_set(True)
+        context.view_layer.objects.active = orig_obj
+        
+        # Switch back to Edit Mode (restores exact vertex selection)
+        bpy.ops.object.mode_set(mode='EDIT')
+
+        # 7. Call the existing proximity transfer operator
+        try:
+            bpy.ops.mesh.proximity_weight_transfer()
+        except Exception as e:
+            self.report({'ERROR'}, f"Weight transfer failed: {str(e)}")
+
+        # 8. Cleanup operations
+        bpy.ops.object.mode_set(mode='OBJECT')
+        
+        bpy.ops.object.select_all(action='DESELECT')
+        dup_obj.select_set(True)
+        bpy.ops.object.delete()
+
+        orig_obj.select_set(True)
+        context.view_layer.objects.active = orig_obj
+        scene.weight_source_object = prev_source_obj
+
+        bpy.ops.object.mode_set(mode='EDIT')
+
+        self.report({'INFO'}, f"Weights mirrored automatically (Flip required: {auto_flip}).")
         return {'FINISHED'}
 
 class MESH_RemoveNonDeformVGroups_OT_VIZOR(bpy.types.Operator):
@@ -219,6 +342,7 @@ class VIEW3D_PT_other_tools(bpy.types.Panel):
         # --- CUSTOM TOOLS ---
         layout.label(text="Custom Tools:")
         layout.operator("animation.mirror_skin_weights", text="Mirror Skin Weights", icon='MOD_MIRROR')
+        layout.operator("mesh.selected_vertices_bisect_mirror_weights", text="Bisect Mirror Weights", icon='MOD_MIRROR')
         layout.operator("mesh.remove_non_deform_vgroups", text="Remove Non-Deform Vertex Groups", icon='X')
         layout.operator("skin.clear_empty_weights", text="Clear Empty Weights", icon='X')
 
@@ -228,6 +352,7 @@ classes = (
     CLEAR_EMPTY_WEIGHTS_OT_VIZOR,
     VIEW3D_PT_other_tools,
     MESH_RemoveNonDeformVGroups_OT_VIZOR,
+    MESH_OT_selected_vertices_bisect_mirror_weights
 )
 
 def register():

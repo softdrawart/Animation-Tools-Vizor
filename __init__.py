@@ -11,6 +11,7 @@ bl_info = {
 import importlib
 
 module_names = (
+            "tools.animation.motion_path_update",
             "tools.animation.utils",
             "tools.animation.animation_tab",
             "tools.animation.bake_action",
