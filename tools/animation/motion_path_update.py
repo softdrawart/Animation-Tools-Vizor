@@ -12,13 +12,24 @@ import bpy
 
 # Global flag to track when animation data changes
 _needs_update = False
+_last_frame = -1  # Tracks the current frame to prevent scrubbing lag
 
 @bpy.app.handlers.persistent
 def graph_depsgraph_handler(scene, depsgraph):
     """Fires every time something in the scene updates (like dragging an F-Curve)."""
-    global _needs_update
-    if depsgraph.updates:
-        _needs_update = True
+    global _needs_update, _last_frame
+    
+    # Check if the timeline playhead is moving (scrubbing or playback)
+    if scene.frame_current != _last_frame:
+        _last_frame = scene.frame_current
+        return  # Skip triggering a path calculation if we are just scrubbing
+    
+    # Check what specifically was updated in the scene
+    for update in depsgraph.updates:
+        # Only trigger an update if an Action (Animation Data/F-Curves) was modified
+        if isinstance(update.id, bpy.types.Action):
+            _needs_update = True
+            break  # No need to check further; we only need to know that an update occurred
 
 
 def get_view3d_override(context):

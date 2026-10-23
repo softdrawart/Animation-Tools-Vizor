@@ -18,6 +18,7 @@ class ANIM_OT_bake_to_markers(bpy.types.Operator):
         obj = context.active_object
         scene = context.scene
         selected_bones = context.selected_pose_bones
+        selected_keys_only = scene.bake_selected_keys_only
         
         # FIX: Use timeline_markers instead of markers
         marker_frames = {m.frame for m in scene.timeline_markers}
@@ -56,8 +57,13 @@ class ANIM_OT_bake_to_markers(bpy.types.Operator):
                     # Iterate backwards to safely remove while looping
                     for i in range(len(points) - 1, -1, -1):
                         kp = points[i]
+                        
                         # If the keyframe frame is not in our marker set
                         if round(kp.co.x) not in marker_frames:
+                            # If "Selected Keys Only" is checked, skip unselected keys
+                            if selected_keys_only and not kp.select_control_point:
+                                continue
+                                
                             points.remove(kp)
                     
                     fcurve.update()
@@ -66,6 +72,7 @@ class ANIM_OT_bake_to_markers(bpy.types.Operator):
         scene.frame_set(original_frame)
         self.report({'INFO'}, f"Baked {len(selected_bones)} bones to {len(marker_frames)} markers.")
         return {'FINISHED'}
+
 
 class ANIM_PT_marker_bake_panel(bpy.types.Panel):
     """Creates a Panel in the View3D Sidebar"""
@@ -77,8 +84,13 @@ class ANIM_PT_marker_bake_panel(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
+        scene = context.scene
+        
         col = layout.column(align=True)
+        col.prop(scene, "bake_selected_keys_only")
+        col.separator()
         col.operator("anim.bake_to_markers", icon='MARKER')
+
 
 classes = (
     ANIM_OT_bake_to_markers,
@@ -86,10 +98,20 @@ classes = (
 )
 
 def register():
+    # Register the Scene property for the checkbox
+    bpy.types.Scene.bake_selected_keys_only = bpy.props.BoolProperty(
+        name="Selected Keys Only",
+        description="Only clean up keyframes that are currently selected. Unselected keys will be kept",
+        default=False
+    )
+    
     for cls in classes:
         bpy.utils.register_class(cls)
 
 def unregister():
+    # Remove the Scene property
+    del bpy.types.Scene.bake_selected_keys_only
+    
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
 

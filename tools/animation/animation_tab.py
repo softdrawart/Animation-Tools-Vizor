@@ -588,11 +588,11 @@ class SELECT_BONES_BY_TYPE_OT_VIZOR(bpy.types.Operator):
         for bone in armature.pose.bones:
             if self.bone_type == 'DEF':
                 if 'def' in bone.name.lower() or bone.bone.use_deform:
-                    bone.bone.select = True
+                    bone.select = True
                     count += 1
             elif self.bone_type == 'CTRL':
                 if 'ctrl' in bone.name.lower() or bone.custom_shape:
-                    bone.bone.select = True
+                    bone.select = True
                     count += 1
 
         self.report({'INFO'}, f"Selected {count} {self.bone_type} bones.")
