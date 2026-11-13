@@ -321,7 +321,72 @@ class CLEAR_EMPTY_WEIGHTS_OT_VIZOR(bpy.types.Operator):
         for obj in [obj for obj in context.selected_objects if obj.type=='MESH']:
             self.remove_empty_weights(obj)
         return {'FINISHED'}
+class MESH_OT_rename_vg_to_bone_VIZOR(bpy.types.Operator):
+    """Rename Active Vertex Group to Active Pose Bone Name"""
+    bl_idname = "mesh.rename_vg_to_bone"
+    bl_label = "Rename VG to Pose Bone"
+    bl_options = {'REGISTER', 'UNDO'}
 
+    mirror_bone_name: bpy.props.BoolProperty(
+        name="Mirror Bone Name",
+        description="If true, finds and renames the opposite side's vertex group as well",
+        default=True
+    )
+
+    @classmethod
+    def poll(cls, context):
+        # 1. Check if the active object is a mesh and has an active vertex group
+        obj = context.active_object
+        if not obj or obj.type != 'MESH':
+            return False
+        if not obj.vertex_groups or not obj.vertex_groups.active:
+            return False
+            
+        # 2. Check if an armature is currently selected
+        if not any(o.type == 'ARMATURE' for o in context.selected_objects):
+            return False
+            
+        # 3. Check for exactly ONE active and selected pose bone
+        if not context.active_pose_bone:
+            return False
+        if len(context.selected_pose_bones) != 1:
+            return False
+            
+        return True
+
+    def get_side_and_mirror(self, name):
+        """Helper to get the side and the expected mirrored string"""
+        if name.endswith('.L'): return 'L', name[:-2] + '.R'
+        if name.endswith('.R'): return 'R', name[:-2] + '.L'
+        if name.endswith('_L'): return 'L', name[:-2] + '_R'
+        if name.endswith('_R'): return 'R', name[:-2] + '_L'
+        return None, None
+
+    def execute(self, context):
+        obj = context.active_object
+        active_vg = obj.vertex_groups.active
+        active_bone = context.active_pose_bone
+        
+        # Determine suffixes and mirror names
+        vg_side, vg_mirror_name = self.get_side_and_mirror(active_vg.name)
+        bone_side, bone_mirror_name = self.get_side_and_mirror(active_bone.name)
+        
+        # Check condition: if both have sides but they do not match
+        if (vg_side and bone_side) and (vg_side != bone_side):
+            self.report({'ERROR'}, "Not same side")
+            return {'CANCELLED'}
+            
+        # Rename the active vertex group
+        active_vg.name = active_bone.name
+        
+        # If enabled and both elements are sided, find and rename the mirror group
+        if self.mirror_bone_name and vg_mirror_name and bone_mirror_name:
+            mirror_vg = obj.vertex_groups.get(vg_mirror_name)
+            if mirror_vg:
+                mirror_vg.name = bone_mirror_name
+                
+        return {'FINISHED'}
+    
 class VIEW3D_PT_other_tools(bpy.types.Panel):
     """Creates a Panel in the 3D Viewport UI sidebar"""
     bl_space_type = 'VIEW_3D'
@@ -341,6 +406,7 @@ class VIEW3D_PT_other_tools(bpy.types.Panel):
 
         # --- CUSTOM TOOLS ---
         layout.label(text="Custom Tools:")
+        layout.operator("mesh.rename_vg_to_bone", text="Rename VG to Bone", icon='MOD_MIRROR')
         layout.operator("animation.mirror_skin_weights", text="Mirror Skin Weights", icon='MOD_MIRROR')
         layout.operator("mesh.selected_vertices_bisect_mirror_weights", text="Bisect Mirror Weights", icon='MOD_MIRROR')
         layout.operator("mesh.remove_non_deform_vgroups", text="Remove Non-Deform Vertex Groups", icon='X')
@@ -352,7 +418,8 @@ classes = (
     CLEAR_EMPTY_WEIGHTS_OT_VIZOR,
     VIEW3D_PT_other_tools,
     MESH_RemoveNonDeformVGroups_OT_VIZOR,
-    MESH_OT_selected_vertices_bisect_mirror_weights
+    MESH_OT_selected_vertices_bisect_mirror_weights,
+    MESH_OT_rename_vg_to_bone_VIZOR
 )
 
 def register():

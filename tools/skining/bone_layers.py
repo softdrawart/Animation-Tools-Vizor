@@ -32,8 +32,8 @@ class WEIGHTPAINT_PT_bone_collections(Panel):
 
     @classmethod
     def poll(cls, context):
-        if context.mode != 'PAINT_WEIGHT':
-            return False
+        """ if context.mode != 'PAINT_WEIGHT':
+            return False """
         mesh = context.active_object
         obj = context.selected_objects
         if len(obj) > 2:

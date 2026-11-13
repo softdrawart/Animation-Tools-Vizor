@@ -1,4 +1,5 @@
 import bpy
+from . import utils
 
 class ANIM_OT_MirrorLoopComplex(bpy.types.Operator):
     """Mirror animation: Handles complex names, wrap logic, and boundary sync"""
@@ -44,8 +45,10 @@ class ANIM_OT_MirrorLoopComplex(bpy.types.Operator):
             # 2. COLLECT SOURCE METADATA
             source_keyframes = set()
             source_handle_info = {}
-            
-            source_fcurves = [fc for fc in action.fcurves if fc.data_path.startswith(source_prefix)]
+
+            fcurves = utils.get_all_fcurves(action)
+
+            source_fcurves = [fc for fc in fcurves if fc.data_path.startswith(source_prefix)]
             for fc in source_fcurves:
                 prop_key = fc.data_path + str(fc.array_index)
                 for kp in fc.keyframe_points:
@@ -90,10 +93,10 @@ class ANIM_OT_MirrorLoopComplex(bpy.types.Operator):
                 scale = source.scale.copy()
                 MirroredPoses[sf] = {'loc': loc, 'rot_q': rot_q, 'rot_e': rot_e, 'scale': scale}
 
-            # 4. CLEAR TARGET
-            target_fcurves = [fc for fc in action.fcurves if fc.data_path.startswith(target_prefix)]
+            # 4. CLEAR TARGET (Use utils to safely remove F-Curves across Blender versions)
+            target_fcurves = [fc for fc in utils.get_all_fcurves(action) if fc.data_path.startswith(target_prefix)]
             for fc in target_fcurves:
-                action.fcurves.remove(fc)
+                utils.remove_fcurve(action, fc)
 
             # 5. BUILD AND WRAP TARGET KEYS
             # Step A: Process everything into a temporary map
@@ -123,9 +126,9 @@ class ANIM_OT_MirrorLoopComplex(bpy.types.Operator):
                 if pose['rot_e']: target.keyframe_insert(data_path="rotation_euler")
                 target.keyframe_insert(data_path="scale")
 
-            # 6. RESTORE HANDLES AND CYCLES
-            target_fcurves = [fc for fc in action.fcurves if fc.data_path.startswith(target_prefix)]
-            for fc in target_fcurves:
+            # 6. RESTORE HANDLES AND CYCLES (Query fresh F-Curves generated in Step 5 using utils)
+            new_target_fcurves = [fc for fc in utils.get_all_fcurves(action) if fc.data_path.startswith(target_prefix)]
+            for fc in new_target_fcurves:
                 prop = fc.data_path + str(fc.array_index)
                 src_prop = prop.replace(target.name, source.name)
                 
